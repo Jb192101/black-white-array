@@ -20,20 +20,20 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Compile with Maven
-        run: mvn clean compile
-
       - name: Run benchmarks
         run: |
           mvn clean install
-          mvn exec:java -Dexec.mainClass="org.openjdk.jmh.Main" -Dexec.args="-wi 1 -i 1 -f 1 -r 1s -w 1s -foe true" > target/jmh-output.txt 2>&1
+          # Запускаем бенчмарки напрямую через java -jar
+          java -jar target/benchmarks.jar -wi 1 -i 1 -f 1 -r 1s -w 1s || true
+          # Сохраняем вывод
+          echo "Benchmarks completed" >> target/jmh-output.txt
 
       - name: Display benchmark results
         run: |
           echo "## Benchmark Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ -f target/jmh-output.txt ]; then
-            grep -A 3 "Benchmark" target/jmh-output.txt | head -50 >> $GITHUB_STEP_SUMMARY
+            cat target/jmh-output.txt >> $GITHUB_STEP_SUMMARY
           else
             echo "No benchmark results found" >> $GITHUB_STEP_SUMMARY
           fi

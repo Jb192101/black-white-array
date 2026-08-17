@@ -1,0 +1,61 @@
+name: Java CI with Maven
+
+on:
+  push:
+    branches: [ "main", "master", "develop" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        java-version: [11, 17, 21]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ matrix.java-version }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java-version }}
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      - name: Compile with Maven
+        run: mvn clean compile
+
+      - name: Run tests with Maven
+        run: mvn test
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results-java${{ matrix.java-version }}
+          path: target/surefire-reports/
+
+      - name: Generate test report
+        if: always()
+        run: |
+          echo "## Test Results (Java ${{ matrix.java-version }})" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Class | Tests | Failures | Errors | Skipped |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|-------|----------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+          if [ -f target/surefire-reports/TEST-*.xml ]; then
+            grep -h "tests=\|failures=\|errors=\|skipped=" target/surefire-reports/TEST-*.xml | \
+            sed 's/.*tests="\([0-9]*\)".*failures="\([0-9]*\)".*errors="\([0-9]*\)".*skipped="\([0-9]*\)".*/\1 \2 \3 \4/' | \
+            while read -r tests failures errors skipped; do
+              echo "| Test | $tests | $failures | $errors | $skipped |" >> $GITHUB_STEP_SUMMARY
+            done
+          fi

@@ -20,13 +20,27 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      - name: Compile with Maven
+        run: mvn clean compile
+
       - name: Run benchmarks
         run: |
           mvn clean install
-          mvn exec:java -Dexec.mainClass="org.openjdk.jmh.Main" -Dexec.args="-wi 1 -i 1 -f 1 -r 1s -w 1s"
+          mvn exec:java -Dexec.mainClass="org.openjdk.jmh.Main" -Dexec.args="-wi 1 -i 1 -f 1 -r 1s -w 1s -foe true" > target/jmh-output.txt 2>&1
+
+      - name: Display benchmark results
+        run: |
+          echo "## Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f target/jmh-output.txt ]; then
+            grep -A 3 "Benchmark" target/jmh-output.txt | head -50 >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No benchmark results found" >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
           path: target/jmh-output.txt
+          retention-days: 30

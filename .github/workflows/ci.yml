@@ -27,7 +27,7 @@ jobs:
           cache: maven
 
       - name: Cache Maven dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
@@ -41,21 +41,33 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-results-java${{ matrix.java-version }}
           path: target/surefire-reports/
+          retention-days: 30
 
       - name: Generate test report
         if: always()
         run: |
           echo "## Test Results (Java ${{ matrix.java-version }})" >> $GITHUB_STEP_SUMMARY
-          echo "| Test Class | Tests | Failures | Errors | Skipped |" >> $GITHUB_STEP_SUMMARY
-          echo "|------------|-------|----------|--------|---------|" >> $GITHUB_STEP_SUMMARY
-          if [ -f target/surefire-reports/TEST-*.xml ]; then
-            grep -h "tests=\|failures=\|errors=\|skipped=" target/surefire-reports/TEST-*.xml | \
-            sed 's/.*tests="\([0-9]*\)".*failures="\([0-9]*\)".*errors="\([0-9]*\)".*skipped="\([0-9]*\)".*/\1 \2 \3 \4/' | \
-            while read -r tests failures errors skipped; do
-              echo "| Test | $tests | $failures | $errors | $skipped |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | Test Class | Tests | Failures | Errors | Skipped |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|------------|-------|----------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+          if [ -d target/surefire-reports ] && [ "$(ls -A target/surefire-reports)" ]; then
+            for file in target/surefire-reports/TEST-*.xml; do
+              if [ -f "$file" ]; then
+                classname=$(grep -o 'classname="[^"]*"' "$file" | head -1 | sed 's/classname="//;s/"//')
+                tests=$(grep -o 'tests="[0-9]*"' "$file" | head -1 | sed 's/tests="//;s/"//')
+                failures=$(grep -o 'failures="[0-9]*"' "$file" | head -1 | sed 's/failures="//;s/"//')
+                errors=$(grep -o 'errors="[0-9]*"' "$file" | head -1 | sed 's/errors="//;s/"//')
+                skipped=$(grep -o 'skipped="[0-9]*"' "$file" | head -1 | sed 's/skipped="//;s/"//')
+                if [ "$failures" != "0" ] || [ "$errors" != "0" ]; then
+                  echo "| ❌ | $classname | $tests | $failures | $errors | $skipped |" >> $GITHUB_STEP_SUMMARY
+                else
+                  echo "| ✅ | $classname | $tests | $failures | $errors | $skipped |" >> $GITHUB_STEP_SUMMARY
+                fi
+              fi
             done
+          else
+            echo "| ⚠️ | No test results found | - | - | - | - |" >> $GITHUB_STEP_SUMMARY
           fi
